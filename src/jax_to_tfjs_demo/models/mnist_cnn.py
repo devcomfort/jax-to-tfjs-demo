@@ -70,6 +70,33 @@ def load_mnist():
     
     return ds_train, ds_test
 
+def load_checkpoint(checkpoint_dir: str = 'checkpoints/mnist', step: int = None) -> train_state.TrainState:
+    """체크포인트 로드
+    
+    Args:
+        checkpoint_dir: 체크포인트 디렉토리 경로
+        step: 로드할 체크포인트 스텝 (None이면 가장 최근 체크포인트)
+    
+    Returns:
+        로드된 학습 상태
+    """
+    checkpoint_dir = Path(checkpoint_dir)
+    checkpointer = ocp.PyTreeCheckpointer()
+    checkpoint_manager = ocp.CheckpointManager(
+        checkpoint_dir,
+        checkpointer,
+        options=ocp.CheckpointManagerOptions(max_to_keep=3)
+    )
+    
+    if step is None:
+        step = checkpoint_manager.latest_step()
+        if step is None:
+            raise ValueError(f"No checkpoint found in {checkpoint_dir}")
+    
+    state = checkpoint_manager.restore(step)
+    print(f"Loaded checkpoint from step {step}")
+    return state
+
 def train_and_evaluate(num_epochs=5, learning_rate=0.001):
     rng = jax.random.PRNGKey(0)
     state = create_train_state(rng, learning_rate)

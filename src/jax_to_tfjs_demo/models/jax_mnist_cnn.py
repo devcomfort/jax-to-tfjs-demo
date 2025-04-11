@@ -205,3 +205,33 @@ def load_mnist():
         test_data.append(convert_to_jax(images, labels))
     
     return train_data, test_data 
+
+def load_checkpoint(checkpoint_dir: str = 'checkpoints/jax_mnist', step: int = None) -> Dict[str, Any]:
+    """체크포인트 로드
+    
+    Args:
+        checkpoint_dir: 체크포인트 디렉토리 경로
+        step: 로드할 체크포인트 스텝 (None이면 가장 최근 체크포인트)
+    
+    Returns:
+        로드된 파라미터와 옵티마이저 상태
+    """
+    checkpoint_dir = Path(checkpoint_dir)
+    checkpointer = ocp.PyTreeCheckpointer()
+    checkpoint_manager = ocp.CheckpointManager(
+        str(checkpoint_dir),
+        checkpointer,
+        options=ocp.CheckpointManagerOptions(max_to_keep=3)
+    )
+    
+    if step is None:
+        step = checkpoint_manager.latest_step()
+        if step is None:
+            raise ValueError(f"No checkpoint found in {checkpoint_dir}")
+    
+    checkpoint = checkpoint_manager.restore(step)
+    print(f"Loaded checkpoint from step {step}")
+    return checkpoint
+
+if __name__ == '__main__':
+    train_and_evaluate() 
