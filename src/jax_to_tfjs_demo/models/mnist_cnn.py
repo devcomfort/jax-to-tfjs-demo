@@ -77,7 +77,7 @@ def train_and_evaluate(num_epochs=5, learning_rate=0.001):
     ds_train, ds_test = load_mnist()
     
     # 체크포인트 저장을 위한 디렉토리 생성
-    checkpoint_dir = Path('results/mnist_checkpoints')
+    checkpoint_dir = Path('checkpoints/mnist')
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
     # Orbax 체크포인트 매니저 생성
