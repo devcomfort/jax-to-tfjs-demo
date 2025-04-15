@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MNIST 손글씨 인식 데모</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+
+    .container {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .canvas-container {
+      margin: 10px;
+    }
+
+    canvas {
+      border: 1px solid #ccc;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      margin-bottom: 10px;
+      background-color: white;
+    }
+
+    .btn-container {
+      margin: 20px 0;
+    }
+
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    #status {
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
+
+    #prediction-result {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+
+    .prediction-bars {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      height: 200px;
+      margin: 20px 0;
+      background-color: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+    }
+
+    .bar {
+      width: 30px;
+      background-color: #4CAF50;
+      margin: 0 5px;
+      transition: height 0.3s;
+      position: relative;
+      border-radius: 3px 3px 0 0;
+    }
+
+    .bar-label {
+      position: absolute;
+      bottom: -25px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .bar-value {
+      position: absolute;
+      top: -25px;
+      width: 100%;
+      text-align: center;
+      font-size: 12px;
+    }
+
+    #debug-info {
+      margin-top: 20px;
+      text-align: left;
+      white-space: pre;
+      font-family: monospace;
+      font-size: 12px;
+      background-color: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>MNIST CNN 데모</h1>
+
+  <p id="status">모델 로딩 중...</p>
+
+  <div class="container">
+    <div class="canvas-container">
+      <h2>입력 이미지</h2>
+      <canvas id="inputCanvas" width="224" height="224"></canvas>
+    </div>
+  </div>
+
+  <div class="prediction-bars" id="prediction-bars">
+    <!-- 예측 바 그래프가 여기에 동적으로 추가됩니다 -->
+  </div>
+
+  <div id="prediction-result">숫자를 그리고 예측 버튼을 누르세요</div>
+
+  <div class="btn-container">
+    <button id="clearButton">지우기</button>
+    <button id="predictButton">예측</button>
+    <button id="debugButton">디버그 정보</button>
+  </div>
+
+  <div id="debug-info" style="display: none;"></div>
+
+  <div id="app"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
