@@ -6,16 +6,16 @@ FLAX 모델의 학습을 위한 구체적인 트레이너 구현을 제공합니
 
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
 import optax
 from flax.training import train_state
 from datetime import datetime
 import os
 import orbax.checkpoint as ocp
 from typing import Any, Dict, Tuple, NamedTuple, Optional, Callable
+from tqdm import tqdm
 
-from ..conf.path import Path
-from .base_trainer import BaseTrainer, TrainingState
+from ..conf.paths import get_flax_checkpoint_path
+from .base_trainer import BaseTrainer
 from .data_loader import MNISTDataLoader
 
 
@@ -126,19 +126,13 @@ class FlaxTrainer(BaseTrainer):
         # 학습 상태 초기화
         state = self.model_manager.create_train_state(self.learning_rate)
 
-        # 데이터 로드
-        train_data, test_data = MNISTDataLoader.load_mnist()
-
         # 체크포인트 경로 설정
-        path_manager = Path()
-        checkpoint_dir = path_manager.flax_checkpoint_dir
-        if subdir:
-            checkpoint_dir = os.path.join(checkpoint_dir, subdir)
-            os.makedirs(checkpoint_dir, exist_ok=True)
+        checkpoint_dir = get_flax_checkpoint_path(subdir)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         # Orbax 체크포인트 매니저 생성
         checkpointer = ocp.PyTreeCheckpointer()
-        options = ocp.CheckpointManagerOptions(max_to_keep=3, save_interval_steps=1000)
+        options = ocp.CheckpointManagerOptions(max_to_keep=3)
         checkpoint_manager = ocp.CheckpointManager(
             directory=str(checkpoint_dir),
             checkpointers={"model": checkpointer},
@@ -156,9 +150,11 @@ class FlaxTrainer(BaseTrainer):
             train_loss = 0
             train_batches = 0
 
-            # 학습 데이터를 새로 로드하여 반복
-            train_data, _ = MNISTDataLoader.load_mnist()
-            for batch_idx, batch in enumerate(train_data):
+            # 매 에포크마다 새로운 이터레이터 생성
+            train_data, test_data = MNISTDataLoader.load_mnist()
+
+            # 진행 표시를 위한 tqdm 사용 (반복자의 크기를 알 수 없으므로 total은 지정하지 않음)
+            for batch_idx, batch in enumerate(tqdm(train_data, desc="학습 중")):
                 state, loss = self.update_step(state, batch)
                 # JAX 값을 Python float로 변환 (jit 외부)
                 loss_value = float(loss)
@@ -166,24 +162,19 @@ class FlaxTrainer(BaseTrainer):
                 train_batches += 1
                 current_step += 1
 
-                # 진행률 표시 (배치 인덱스만 사용)
-                print(
-                    f"\rTraining: Batch {batch_idx + 1} - Loss: {loss_value:.6f}",
-                    end="",
-                )
-
             # 평균 손실 계산
             if train_batches > 0:
                 train_loss /= train_batches
-            print(f"\nTraining Loss: {train_loss:.6f}")
+            print(f"\n에포크 평균 학습 손실: {train_loss:.6f}")
 
             # 테스트 데이터로 손실 계산
             test_loss = 0.0
             test_batches = 0
 
-            # 테스트 데이터를 새로 로드하여 반복
+            # 매 에포크마다 새로운 테스트 이터레이터 생성
             _, test_data = MNISTDataLoader.load_mnist()
-            for batch_idx, batch in enumerate(test_data):
+
+            for batch_idx, batch in enumerate(tqdm(test_data, desc="평가 중")):
                 logits = self.model_manager.model.apply(
                     {"params": state.params}, batch["image"]
                 )
@@ -193,25 +184,17 @@ class FlaxTrainer(BaseTrainer):
                 test_loss += batch_loss_float
                 test_batches += 1
 
-                # 진행률 표시 (배치 인덱스만 사용)
-                print(
-                    f"\rEvaluating: Batch {batch_idx + 1} - Loss: {batch_loss_float:.6f}",
-                    end="",
-                )
-
             # 평균 손실 계산
             if test_batches > 0:
                 test_loss /= test_batches
-            print(f"\nTest Loss: {test_loss:.6f}")
+            print(f"\n에포크 평균 테스트 손실: {test_loss:.6f}")
 
             # 체크포인트 저장
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
             # 체크포인트 저장
             checkpoint_manager.save(epoch + 1, {"model": state})
-            print(
-                f"Checkpoint saved: {os.path.join(checkpoint_dir, f'step_{epoch + 1}')}"
-            )
+            print(f"Checkpoint saved: {checkpoint_dir / str(epoch + 1) / 'model'}")
 
         # 최종 손실을 float으로 변환하여 반환
         final_loss = float(test_loss)

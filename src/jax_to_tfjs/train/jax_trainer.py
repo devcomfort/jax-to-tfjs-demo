@@ -7,7 +7,6 @@ JAX 모델의 학습을 위한 구체적인 트레이너 구현을 제공합니�
 import jax
 import jax.numpy as jnp
 import optax
-from datetime import datetime
 import os
 import orbax.checkpoint as ocp
 from typing import (
@@ -17,16 +16,14 @@ from typing import (
     NamedTuple,
     Optional,
     Iterator,
-    List,
-    TypeVar,
     Union,
     cast,
 )
 import numpy as np
 from tqdm import tqdm
 
-from ..conf.path import Path
-from .base_trainer import BaseTrainer, TrainingState
+from ..conf.paths import get_jax_checkpoint_path
+from .base_trainer import BaseTrainer
 from .data_loader import MNISTDataLoader
 
 # 타입 정의
@@ -228,15 +225,12 @@ class JAXTrainer(BaseTrainer):
         train_data, test_data = MNISTDataLoader.load_mnist()
 
         # 체크포인트 경로 설정
-        path_manager = Path()
-        checkpoint_dir = path_manager.jax_checkpoint_dir
-        if subdir:
-            checkpoint_dir = os.path.join(checkpoint_dir, subdir)
-            os.makedirs(checkpoint_dir, exist_ok=True)
+        checkpoint_dir = get_jax_checkpoint_path(subdir)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         # Orbax 체크포인트 매니저 생성
         checkpointer = ocp.PyTreeCheckpointer()
-        options = ocp.CheckpointManagerOptions(max_to_keep=3, save_interval_steps=1000)
+        options = ocp.CheckpointManagerOptions(max_to_keep=3)
         checkpoint_manager = ocp.CheckpointManager(
             directory=str(checkpoint_dir),
             checkpointers={"model": checkpointer},
@@ -274,9 +268,7 @@ class JAXTrainer(BaseTrainer):
             checkpoint_manager.save(
                 epoch + 1, {"model": {"params": params, "opt_state": opt_state}}
             )
-            print(
-                f"Checkpoint saved: {os.path.join(checkpoint_dir, f'step_{epoch + 1}')}"
-            )
+            print(f"Checkpoint saved: {checkpoint_dir / str(epoch + 1) / 'model'}")
 
         self.model.params = params  # 학습된 파라미터 업데이트
 
