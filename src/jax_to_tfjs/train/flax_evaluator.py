@@ -4,12 +4,10 @@ FLAX 모델 평가자 구현
 FLAX 모델의 평가를 위한 구체적인 평가자 구현을 제공합니다.
 """
 
-import jax
 import jax.numpy as jnp
-import flax.linen as nn
 from flax.training import train_state
 import numpy as np
-from typing import Any, Dict, Tuple, List
+from typing import Tuple
 from tqdm import tqdm
 
 from .base_evaluator import BaseEvaluator
