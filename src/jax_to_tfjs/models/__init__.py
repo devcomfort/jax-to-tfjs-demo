@@ -26,6 +26,8 @@ __all__ = [
     "flax_train_and_evaluate",  # Flax 모델 학습 및 평가
     "flax_load_checkpoint",  # Flax 모델 체크포인트 로드
     "jax_load_checkpoint",  # Jax 모델 체크포인트 로드
+    "init_cnn_params",  # CNN 파라미터 초기화
+    "cnn_forward",  # CNN 순방향 전파
 ]
 
 # train 모듈에서 클래스들 가져오기
@@ -49,3 +51,19 @@ from .common.train_utils import train_and_evaluate as flax_train_and_evaluate
 # 이전 코드와의 호환성을 위해 expose하는 함수들
 from .flax.utils import load_checkpoint as flax_load_checkpoint
 from .jax.utils import load_checkpoint as jax_load_checkpoint
+
+from .jax import CNNModel, JAXModelManager, AutoencoderModel, JAXAutoencoderManager
+from .flax import CNN, FlaxModelManager, Autoencoder, FlaxAutoencoderManager
+
+__all__ = [
+    # JAX 모델들
+    "CNNModel",
+    "JAXModelManager",
+    "AutoencoderModel",
+    "JAXAutoencoderManager",
+    # FLAX 모델들
+    "CNN",
+    "FlaxModelManager",
+    "Autoencoder",
+    "FlaxAutoencoderManager",
+]

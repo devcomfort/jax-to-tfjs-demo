@@ -8,8 +8,10 @@ FLAX MNIST CNN 모델 실행 모듈
 import argparse
 import logging
 import os
+from typing import Dict, Any, Optional
 
 from .flax.model_manager import FlaxModelManager
+from .flax.utils import load_checkpoint
 from .common.train_utils import train_and_evaluate
 
 

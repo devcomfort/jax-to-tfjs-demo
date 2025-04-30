@@ -6,7 +6,6 @@ FLAX 모델의 초기화와 체크포인트 관리를 담당하는 클래스를 
 
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
 import optax
 from flax.training import train_state
 import orbax.checkpoint as ocp
@@ -52,6 +51,18 @@ class FlaxModelManager:
         self.variables = self.model.init(init_rng, dummy_input)
 
         return self.variables
+
+    def get_params(self) -> Dict[str, Any]:
+        """
+        모델 파라미터 반환
+
+        Returns:
+            모델 파라미터
+        """
+        if self.variables is None:
+            self.init_model()
+
+        return self.variables["params"]
 
     def create_train_state(
         self, learning_rate: float = 0.001

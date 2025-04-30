@@ -5,8 +5,13 @@ JAX로 구현된 CNN 모델 클래스를 정의합니다.
 """
 
 import jax
-import jax.numpy as jnp
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Tuple
+
+from ...conf.types import Array, PRNGKey, Params
+from .utils import (
+    init_cnn_params,
+    create_cnn_forward,
+)
 
 
 class CNNModel:
@@ -16,56 +21,55 @@ class CNNModel:
     CNN 모델의 구조를 정의하고 파라미터 초기화, 모델 적용 등의 기능을 제공합니다.
     """
 
-    def __init__(self, rng: jax.random.PRNGKey = None):
+    def __init__(
+        self,
+        rng: Optional[PRNGKey] = None,
+        input_shape: Tuple[int, int, int] = (28, 28, 1),
+        num_classes: int = 10,
+        num_filters: Tuple[int, ...] = (32, 64),
+        dense_features: int = 128,
+    ):
         """
         CNN 모델 클래스 초기화
 
         Args:
             rng: JAX 난수 생성을 위한 키 (기본값: None, 이 경우 자동 생성)
+            input_shape: 입력 이미지 형태 (기본값: (28, 28, 1))
+            num_classes: 출력 클래스 수 (기본값: 10)
+            num_filters: 각 레이어의 필터 수 (기본값: (32, 64))
+            dense_features: 완전 연결 레이어의 노드 수 (기본값: 128)
         """
         self.rng = rng if rng is not None else jax.random.PRNGKey(0)
         self.params = None
+        self.opt_state = None
+        self.input_shape = input_shape
+        self.num_classes = num_classes
+        self.num_filters = num_filters
+        self.dense_features = dense_features
 
-    def init_params(self) -> Dict[str, Any]:
+        # 모델 순전파 함수 생성
+        self._forward_fn = create_cnn_forward(
+            num_conv_layers=len(num_filters),
+            num_dense_layers=2,  # 고정: 1개의 히든 레이어 + 1개의 출력 레이어
+        )
+
+    def init_params(self) -> Params:
         """
         CNN 모델 파라미터 초기화
 
         Returns:
             초기화된 모델 파라미터 딕셔너리
         """
-        keys = jax.random.split(self.rng, 5)
-
-        # 첫 번째 컨볼루션 레이어
-        conv1 = {
-            "w": jax.random.normal(keys[0], (3, 3, 1, 32)) * 0.1,
-            "b": jnp.zeros(32),
-        }
-
-        # 두 번째 컨볼루션 레이어
-        conv2 = {
-            "w": jax.random.normal(keys[1], (3, 3, 32, 64)) * 0.1,
-            "b": jnp.zeros(64),
-        }
-
-        # 첫 번째 완전 연결 레이어
-        dense1 = {
-            "w": jax.random.normal(keys[2], (7 * 7 * 64, 128)) * 0.1,
-            "b": jnp.zeros(128),
-        }
-
-        # 출력 레이어
-        dense2 = {"w": jax.random.normal(keys[3], (128, 10)) * 0.1, "b": jnp.zeros(10)}
-
-        self.params = {
-            "conv1": conv1,
-            "conv2": conv2,
-            "dense1": dense1,
-            "dense2": dense2,
-        }
-
+        self.params = init_cnn_params(
+            rng_key=self.rng,
+            input_shape=self.input_shape,
+            num_classes=self.num_classes,
+            num_filters=self.num_filters,
+            dense_features=self.dense_features,
+        )
         return self.params
 
-    def forward(self, params: Dict[str, Any], x: jnp.ndarray) -> jnp.ndarray:
+    def forward(self, params: Params, x: Array) -> Array:
         """
         CNN 모델 순전파
 
@@ -76,52 +80,14 @@ class CNNModel:
         Returns:
             모델 출력 (로짓)
         """
-        # 입력 이미지 reshape (B, H, W) -> (B, H, W, C)
-        if len(x.shape) == 3:
-            x = x.reshape(*x.shape, 1)
+        return self._forward_fn(params, x)
 
-        # 첫 번째 컨볼루션 레이어
-        x = jax.lax.conv_general_dilated(
-            x,
-            params["conv1"]["w"],
-            window_strides=(1, 1),
-            padding="SAME",
-            dimension_numbers=("NHWC", "HWIO", "NHWC"),
-        )
-        x = x + params["conv1"]["b"][None, None, None, :]
-        x = jax.nn.relu(x)
-        x = jax.lax.reduce_window(
-            x, -jnp.inf, jax.lax.max, (1, 2, 2, 1), (1, 2, 2, 1), "SAME"
-        )
-
-        # 두 번째 컨볼루션 레이어
-        x = jax.lax.conv_general_dilated(
-            x,
-            params["conv2"]["w"],
-            window_strides=(1, 1),
-            padding="SAME",
-            dimension_numbers=("NHWC", "HWIO", "NHWC"),
-        )
-        x = x + params["conv2"]["b"][None, None, None, :]
-        x = jax.nn.relu(x)
-        x = jax.lax.reduce_window(
-            x, -jnp.inf, jax.lax.max, (1, 2, 2, 1), (1, 2, 2, 1), "SAME"
-        )
-
-        # 완전 연결 레이어
-        x = x.reshape((x.shape[0], -1))
-        x = jnp.dot(x, params["dense1"]["w"]) + params["dense1"]["b"]
-        x = jax.nn.relu(x)
-        x = jnp.dot(x, params["dense2"]["w"]) + params["dense2"]["b"]
-
-        return x
-
-    def apply(self, params: Dict[str, Any], x: jnp.ndarray) -> jnp.ndarray:
+    def apply(self, params: Dict[str, Any], x: Array) -> Array:
         """
         모델 추론을 위한 함수
 
         Args:
-            params: 모델 파라미터
+            params: 모델 파라미터 (또는 {'params': ...} 형태의 딕셔너리)
             x: 입력 데이터
 
         Returns:
@@ -132,3 +98,16 @@ class CNNModel:
             params = params["params"]
 
         return self.forward(params, x)
+
+    def init_optimizer(self, learning_rate: float = 0.001) -> None:
+        """
+        옵티마이저 초기화
+
+        Args:
+            learning_rate: 학습률
+        """
+        if self.params is None:
+            self.init_params()
+
+        # 간단한 옵티마이저 상태 초기화
+        self.opt_state = {"learning_rate": learning_rate, "iteration": 0}

@@ -1,7 +1,7 @@
 """
-모델 관련 공통 유틸리티 모듈
+공통 유틸리티 모듈
 
-모델링과 관련된 공통 유틸리티 클래스와 함수를 제공합니다.
+JAX 및 FLAX 모델에서 공통으로 사용하는 유틸리티 함수들을 제공합니다.
 """
 
 from .train_utils import train_and_evaluate
