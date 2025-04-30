@@ -52,18 +52,14 @@ from .common.train_utils import train_and_evaluate as flax_train_and_evaluate
 from .flax.utils import load_checkpoint as flax_load_checkpoint
 from .jax.utils import load_checkpoint as jax_load_checkpoint
 
-from .jax import CNNModel, JAXModelManager, AutoencoderModel, JAXAutoencoderManager
-from .flax import CNN, FlaxModelManager, Autoencoder, FlaxAutoencoderManager
+from .jax import CNNModel, JAXModelManager
+from .flax import CNN, FlaxModelManager
 
 __all__ = [
     # JAX 모델들
     "CNNModel",
     "JAXModelManager",
-    "AutoencoderModel",
-    "JAXAutoencoderManager",
     # FLAX 모델들
     "CNN",
     "FlaxModelManager",
-    "Autoencoder",
-    "FlaxAutoencoderManager",
 ]
