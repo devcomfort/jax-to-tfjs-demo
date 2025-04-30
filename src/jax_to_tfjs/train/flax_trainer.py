@@ -7,16 +7,30 @@ FLAX 모델의 학습을 위한 구체적인 트레이너 구현을 제공합니
 import jax
 import jax.numpy as jnp
 import optax
+from flax import struct
 from flax.training import train_state
 from datetime import datetime
 import os
 import orbax.checkpoint as ocp
-from typing import Any, Dict, Tuple, NamedTuple, Optional, Callable
+from typing import (
+    Any,
+    Dict,
+    Tuple,
+    NamedTuple,
+    Optional,
+    Callable,
+    Iterator,
+    Union,
+)
 from tqdm import tqdm
+import numpy as np
+from pathlib import Path
+import json
 
 from ..conf.paths import get_flax_checkpoint_path
 from .base_trainer import BaseTrainer
 from .data_loader import MNISTDataLoader
+from .flax_evaluator import FlaxEvaluator
 
 
 class FlaxTrainingState(NamedTuple):
@@ -111,7 +125,10 @@ class FlaxTrainer(BaseTrainer):
         return update_step
 
     def train(
-        self, num_epochs: int = 5, subdir: Optional[str] = None
+        self,
+        num_epochs: int = 5,
+        subdir: Optional[str] = None,
+        evaluate_after_training: bool = True,
     ) -> FlaxTrainingState:
         """
         모델 학습 수행
@@ -119,6 +136,7 @@ class FlaxTrainer(BaseTrainer):
         Args:
             num_epochs: 학습 에포크 수 (기본값: 5)
             subdir: 체크포인트 저장 하위 디렉토리 (기본값: None)
+            evaluate_after_training: 학습 후 상세 평가 수행 여부 (기본값: True)
 
         Returns:
             최종 학습 상태
@@ -153,19 +171,43 @@ class FlaxTrainer(BaseTrainer):
             # 매 에포크마다 새로운 이터레이터 생성
             train_data, test_data = MNISTDataLoader.load_mnist()
 
-            # 진행 표시를 위한 tqdm 사용 (반복자의 크기를 알 수 없으므로 total은 지정하지 않음)
-            for batch_idx, batch in enumerate(tqdm(train_data, desc="학습 중")):
-                state, loss = self.update_step(state, batch)
-                # JAX 값을 Python float로 변환 (jit 외부)
-                loss_value = float(loss)
-                train_loss += loss_value
-                train_batches += 1
-                current_step += 1
+            # MNIST 훈련 데이터 크기 60,000개를 배치 크기 32로 나누면 약 1875 배치
+            estimated_train_batches = 1875
+
+            # 진행 표시를 위한 tqdm 사용 (JAX 트레이너와 동일한 형식으로 통일)
+            progress_bar = tqdm(
+                total=estimated_train_batches,
+                desc="Training",
+                bar_format="{l_bar}{bar:30}{r_bar}",
+                ascii=True,  # ASCII 문자만 사용하여 일관된 표시
+            )
+
+            try:
+                for batch_idx in range(estimated_train_batches):
+                    try:
+                        batch = next(train_data)
+                        state, loss = self.update_step(state, batch)
+
+                        # JAX 값을 Python float로 변환 (jit 외부)
+                        loss_value = float(loss)
+                        train_loss += loss_value
+                        train_batches += 1
+                        current_step += 1
+
+                        # 진행 상태 업데이트
+                        progress_bar.update(1)
+                        # loss 형식을 .6f로 변경하여 일정한 폭으로 표시
+                        loss_formatted = f"{loss_value:.6f}"
+                        progress_bar.set_postfix({"loss": loss_formatted})
+                    except StopIteration:
+                        break
+            finally:
+                progress_bar.close()
 
             # 평균 손실 계산
             if train_batches > 0:
                 train_loss /= train_batches
-            print(f"\n에포크 평균 학습 손실: {train_loss:.6f}")
+            print(f"Training Loss: {train_loss:.6f}")
 
             # 테스트 데이터로 손실 계산
             test_loss = 0.0
@@ -174,23 +216,45 @@ class FlaxTrainer(BaseTrainer):
             # 매 에포크마다 새로운 테스트 이터레이터 생성
             _, test_data = MNISTDataLoader.load_mnist()
 
-            for batch_idx, batch in enumerate(tqdm(test_data, desc="평가 중")):
-                logits = self.model_manager.model.apply(
-                    {"params": state.params}, batch["image"]
-                )
-                batch_loss = self._compute_loss(logits, batch["label"])
-                # JAX 값을 Python float로 변환 (jit 외부)
-                batch_loss_float = float(batch_loss)
-                test_loss += batch_loss_float
-                test_batches += 1
+            # MNIST 테스트 데이터 10,000개를 배치 크기 32로 나누면 약 312 배치
+            estimated_test_batches = 312
+
+            # 테스트 진행 표시를 위한 tqdm 사용
+            progress_bar = tqdm(
+                total=estimated_test_batches,
+                desc="Evaluating",
+                bar_format="{l_bar}{bar:30}{r_bar}",
+                ascii=True,  # ASCII 문자만 사용하여 일관된 표시
+            )
+
+            try:
+                for batch_idx in range(estimated_test_batches):
+                    try:
+                        batch = next(test_data)
+                        logits = self.model_manager.model.apply(
+                            {"params": state.params}, batch["image"]
+                        )
+                        batch_loss = self._compute_loss(logits, batch["label"])
+
+                        # JAX 값을 Python float로 변환 (jit 외부)
+                        batch_loss_float = float(batch_loss)
+                        test_loss += batch_loss_float
+                        test_batches += 1
+
+                        # 진행 상태 업데이트
+                        progress_bar.update(1)
+                        # loss 형식을 .6f로 변경하여 일정한 폭으로 표시
+                        loss_formatted = f"{batch_loss_float:.6f}"
+                        progress_bar.set_postfix({"loss": loss_formatted})
+                    except StopIteration:
+                        break
+            finally:
+                progress_bar.close()
 
             # 평균 손실 계산
             if test_batches > 0:
                 test_loss /= test_batches
-            print(f"\n에포크 평균 테스트 손실: {test_loss:.6f}")
-
-            # 체크포인트 저장
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            print(f"Test Loss: {test_loss:.6f}")
 
             # 체크포인트 저장
             checkpoint_manager.save(epoch + 1, {"model": state})
@@ -198,6 +262,70 @@ class FlaxTrainer(BaseTrainer):
 
         # 최종 손실을 float으로 변환하여 반환
         final_loss = float(test_loss)
+
+        # 학습 완료 후 상세 평가 수행
+        if evaluate_after_training:
+            print("\n" + "=" * 50)
+            print("학습 완료 후 상세 평가 수행")
+            print("=" * 50)
+
+            # FlaxEvaluator 인스턴스 생성
+            evaluator = FlaxEvaluator(self.model_manager)
+
+            # 상세 평가 수행
+            accuracy, predictions = evaluator.evaluate(state)
+
+            # 상세 메트릭 계산
+            try:
+                from sklearn.metrics import (
+                    precision_score,
+                    recall_score,
+                    f1_score,
+                    confusion_matrix,
+                )
+
+                test_images, test_labels = MNISTDataLoader.load_mnist_test()
+
+                # 정밀도, 재현율, F1 점수 계산
+                precision = precision_score(
+                    test_labels, predictions, average="weighted"
+                )
+                recall = recall_score(test_labels, predictions, average="weighted")
+                f1 = f1_score(test_labels, predictions, average="weighted")
+
+                print(f"\n정확도(Accuracy): {accuracy:.4f}")
+                print(f"정밀도(Precision): {precision:.4f}")
+                print(f"재현율(Recall): {recall:.4f}")
+                print(f"F1 점수: {f1:.4f}")
+
+                # 혼동 행렬 계산 및 출력
+                cm = confusion_matrix(test_labels, predictions)
+                print("\n혼동 행렬:")
+                print(cm)
+
+                # 메트릭 저장
+                evaluation_dir = checkpoint_dir / "evaluation"
+                evaluation_dir.mkdir(exist_ok=True)
+
+                metrics = {
+                    "accuracy": float(accuracy),
+                    "precision": float(precision),
+                    "recall": float(recall),
+                    "f1": float(f1),
+                    "confusion_matrix": cm.tolist(),
+                }
+
+                # 메트릭을 JSON 파일로 저장
+                metrics_path = evaluation_dir / "metrics.json"
+                with open(metrics_path, "w") as f:
+                    json.dump(metrics, f, indent=2)
+
+                print(f"\n평가 메트릭 저장 완료: {metrics_path}")
+
+            except ImportError as e:
+                print(f"상세 메트릭 계산을 위한 라이브러리를 찾을 수 없습니다: {e}")
+                print(f"정확도만 계산합니다: {accuracy:.4f}")
+
         return FlaxTrainingState(
             train_state=state, step=current_step, epoch=num_epochs, loss=final_loss
         )

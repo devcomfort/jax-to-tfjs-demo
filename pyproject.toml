@@ -1,8 +1,16 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "jax-to-tfjs"
 version = "0.1.0"
-description = "JAX/Flax 모델을 TensorFlow.js로 변환하는 데모"
-authors = []
+description = "JAX 및 Flax 모델을 TensorFlow.js로 변환하는 도구"
+authors = [
+    {name = "DevComfort", email = "developer@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
 dependencies = [
     "jax>=0.4.20",
     "flax>=0.8.1",
@@ -10,29 +18,87 @@ dependencies = [
     "tensorflowjs>=4.15.0",
     "orbax-checkpoint>=0.4.1",
     "tensorflow-datasets>=4.9.4",
-    "optax>=0.1.7",
-    "inquirer>=3.1.3",
-    "tqdm>=4.66.0",
     "typer>=0.9.0",
     "rich>=13.7.0",
-    "pytest>=8.3.5",
-    "matplotlib>=3.8.0",
-    "scikit-learn>=1.6.1",
-    "pyinquirer>=1.0.3",
-    "ruff>=0.11.5",
-    "seaborn>=0.13.2",
-    "pandas>=2.2.3",
+    "inquirer>=3.1.3",
+    "optax>=0.1.7",
+    "numpy>=1.24.0",
+    "tqdm>=4.66.0",
+    "psutil>=5.9.0",
+    "scikit-learn>=1.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "isort>=5.10.0",
+    "mypy>=1.0.0",
 ]
 
 [project.scripts]
-train-jax = "jax_to_tfjs.models.jax_mnist_cnn:train_and_evaluate"
-train-flax = "jax_to_tfjs.models.flax_mnist_cnn:train_and_evaluate"
-evaluate = "evaluate:main"
-convert-to-tfjs = "jax_to_tfjs.convert_to_tfjs:main"
+# 기본 변환 명령어
+convert = "jax_to_tfjs.simple_cli:main"
+convert-interactive = "jax_to_tfjs.cli:app"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# 빠른 변환 도우미
+convert-latest-jax = "jax_to_tfjs.cli:convert_latest_jax"
+convert-latest-flax = "jax_to_tfjs.cli:convert_latest_flax"
+
+# 모델 평가
+evaluate = "jax_to_tfjs.evaluate:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.rye.scripts]
+# 훈련 관련 명령어
+train-jax = "python -m jax_to_tfjs.models.jax_mnist_cnn"
+train-flax = "python -m jax_to_tfjs.models.flax_mnist_cnn"
+evaluate = "python -m jax_to_tfjs.evaluate"
+
+# 변환 관련 명령어
+convert = "python -m jax_to_tfjs.convert_to_tfjs_cli"
+convert-interactive = "python -m jax_to_tfjs.convert_to_tfjs_cli --interactive"
+convert-to-tf = "python -m jax_to_tfjs.convert_to_tfjs_cli --output-format tf"
+# convert-to-onnx = "python -m jax_to_tfjs.convert_to_tfjs_cli --output-format onnx"
+# convert-batch = "python -m jax_to_tfjs.convert_to_tfjs_cli --batch"
+
+# 빠른 변환 도우미 명령어
+convert-latest-jax-tf = "python -m jax_to_tfjs.cli convert_latest_jax"
+convert-latest-flax-tf = "python -m jax_to_tfjs.cli convert_latest_flax"
+# convert-latest-jax-onnx = "python -m jax_to_tfjs.scripts.convert_helper --model-type jax --output-format onnx"
+# convert-latest-flax-onnx = "python -m jax_to_tfjs.scripts.convert_helper --model-type flax --output-format onnx"
+
+# 체크포인트 관련 명령어
+ckpt = "python -m jax_to_tfjs.checkpoint_utils"
+ckpt-list = "python -m jax_to_tfjs.checkpoint_utils list"
+ckpt-explore = "python -m jax_to_tfjs.checkpoint_utils explore"
+ckpt-verify = "python -m jax_to_tfjs.checkpoint_utils verify"
+ckpt-i = "python -m jax_to_tfjs.checkpoint_utils interactive"
+
+# 체크포인트 유틸리티 단축 명령어
+ckpt-latest = "python -m jax_to_tfjs.scripts.ckpt_latest"
+ckpt-latest-jax = "python -m jax_to_tfjs.scripts.ckpt_latest --model-type jax"
+ckpt-latest-flax = "python -m jax_to_tfjs.scripts.ckpt_latest --model-type flax"
+ckpt-all = "python -m jax_to_tfjs.checkpoint_utils list --all"
 
 [tool.rye]
 managed = true

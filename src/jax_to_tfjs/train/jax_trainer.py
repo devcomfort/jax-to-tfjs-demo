@@ -8,7 +8,6 @@ import jax
 import jax.numpy as jnp
 import optax
 import os
-import orbax.checkpoint as ocp
 from typing import (
     Any,
     Dict,
@@ -21,10 +20,14 @@ from typing import (
 )
 import numpy as np
 from tqdm import tqdm
+from pathlib import Path
+import json
 
+from ..checkpoint_utils.jax_checkpointer import JAXCheckpointer
 from ..conf.paths import get_jax_checkpoint_path
 from .base_trainer import BaseTrainer
 from .data_loader import MNISTDataLoader
+from .jax_evaluator import JAXEvaluator
 
 # 타입 정의
 # Params를 optax에서 사용하는 PyTree 타입과 호환되도록 재정의
@@ -62,6 +65,7 @@ class JAXTrainer(BaseTrainer):
         self.model = model
         self.optimizer = optax.adam(learning_rate)
         self.update_step = self._create_update_step()
+        self.checkpointer = JAXCheckpointer(max_to_keep=3)
 
     def _compute_loss(self, logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
         """
@@ -203,7 +207,10 @@ class JAXTrainer(BaseTrainer):
         return params, opt_state, avg_loss, batch_count
 
     def train(
-        self, num_epochs: int = 5, subdir: Optional[str] = None
+        self,
+        num_epochs: int = 5,
+        subdir: Optional[str] = None,
+        evaluate_after_training: bool = True,
     ) -> JAXTrainingState:
         """
         모델 학습 및 평가
@@ -211,6 +218,7 @@ class JAXTrainer(BaseTrainer):
         Args:
             num_epochs: 학습 에포크 수 (기본값: 5)
             subdir: 체크포인트 저장 하위 디렉토리 (기본값: None)
+            evaluate_after_training: 학습 후 상세 평가 수행 여부 (기본값: True)
 
         Returns:
             최종 학습 상태 (파라미터, 옵티마이저 상태, 스텝, 에포크, 손실)
@@ -226,16 +234,8 @@ class JAXTrainer(BaseTrainer):
 
         # 체크포인트 경로 설정
         checkpoint_dir = get_jax_checkpoint_path(subdir)
+        # 체크포인트 디렉토리가 존재하지 않으면 생성
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-        # Orbax 체크포인트 매니저 생성
-        checkpointer = ocp.PyTreeCheckpointer()
-        options = ocp.CheckpointManagerOptions(max_to_keep=3)
-        checkpoint_manager = ocp.CheckpointManager(
-            directory=str(checkpoint_dir),
-            checkpointers={"model": checkpointer},
-            options=options,
-        )
 
         current_step = 0
         final_test_loss = 0.0
@@ -265,12 +265,76 @@ class JAXTrainer(BaseTrainer):
             final_test_loss = test_loss
 
             # 체크포인트 저장
-            checkpoint_manager.save(
-                epoch + 1, {"model": {"params": params, "opt_state": opt_state}}
+            checkpoint_state = {"params": params, "opt_state": opt_state}
+            save_path = self.checkpointer.save(
+                epoch + 1, checkpoint_state, checkpoint_dir
             )
-            print(f"Checkpoint saved: {checkpoint_dir / str(epoch + 1) / 'model'}")
+            print(f"Checkpoint saved: {save_path}")
 
         self.model.params = params  # 학습된 파라미터 업데이트
+
+        # 학습 완료 후 상세 평가 수행
+        if evaluate_after_training:
+            print("\n" + "=" * 50)
+            print("학습 완료 후 상세 평가 수행")
+            print("=" * 50)
+
+            # JAXEvaluator 인스턴스 생성
+            evaluator = JAXEvaluator(self.model)
+
+            # 상세 평가 수행
+            accuracy, predictions = evaluator.evaluate(params)
+
+            # 상세 메트릭 계산 (if 구문 대신 try-except로 변경)
+            try:
+                from sklearn.metrics import (
+                    precision_score,
+                    recall_score,
+                    f1_score,
+                    confusion_matrix,
+                )
+
+                test_images, test_labels = MNISTDataLoader.load_mnist_test()
+
+                # 정밀도, 재현율, F1 점수 계산
+                precision = precision_score(
+                    test_labels, predictions, average="weighted"
+                )
+                recall = recall_score(test_labels, predictions, average="weighted")
+                f1 = f1_score(test_labels, predictions, average="weighted")
+
+                print(f"\n정확도(Accuracy): {accuracy:.4f}")
+                print(f"정밀도(Precision): {precision:.4f}")
+                print(f"재현율(Recall): {recall:.4f}")
+                print(f"F1 점수: {f1:.4f}")
+
+                # 혼동 행렬 계산 및 출력
+                cm = confusion_matrix(test_labels, predictions)
+                print("\n혼동 행렬:")
+                print(cm)
+
+                # 메트릭 저장
+                evaluation_dir = checkpoint_dir / "evaluation"
+                evaluation_dir.mkdir(exist_ok=True)
+
+                metrics = {
+                    "accuracy": float(accuracy),
+                    "precision": float(precision),
+                    "recall": float(recall),
+                    "f1": float(f1),
+                    "confusion_matrix": cm.tolist(),
+                }
+
+                # 메트릭을 JSON 파일로 저장
+                metrics_path = evaluation_dir / "metrics.json"
+                with open(metrics_path, "w") as f:
+                    json.dump(metrics, f, indent=2)
+
+                print(f"\n평가 메트릭 저장 완료: {metrics_path}")
+
+            except ImportError as e:
+                print(f"상세 메트릭 계산을 위한 라이브러리를 찾을 수 없습니다: {e}")
+                print(f"정확도만 계산합니다: {accuracy:.4f}")
 
         return JAXTrainingState(
             params=params,
