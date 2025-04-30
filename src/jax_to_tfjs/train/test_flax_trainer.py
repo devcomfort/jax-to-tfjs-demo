@@ -9,15 +9,10 @@ import tempfile
 import shutil
 from pathlib import Path
 import jax
-import jax.numpy as jnp
 import numpy as np
-from typing import Dict, Any, Optional
 
 from jax_to_tfjs.train.flax_trainer import FlaxTrainer
-from jax_to_tfjs.checkpoint_utils.jax_checkpointer import (
-    JAXCheckpointer,
-    CheckpointNotFoundError,
-)
+from jax_to_tfjs.checkpoint_utils.jax_checkpointer import CheckpointNotFoundError
 from jax_to_tfjs.models.flax.model_manager import FlaxModelManager
 
 
