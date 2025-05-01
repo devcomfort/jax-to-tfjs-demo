@@ -232,7 +232,7 @@ def test_jax_checkpoint(epochs, collector, logger, checkpoint_dir):
 
         # 학습 실행
         logger.info(f"JAX 모델 학습 - {epochs} 에포크")
-        train_state = trainer.train(num_epochs=epochs, subdir=str(jax_checkpoint_dir))
+        trainer.train(num_epochs=epochs, subdir=str(jax_checkpoint_dir))
 
         # 체크포인트 존재 확인
         logger.info("체크포인트 검증")
@@ -248,7 +248,7 @@ def test_jax_checkpoint(epochs, collector, logger, checkpoint_dir):
         steps = checkpointer.list_checkpoints(jax_checkpoint_dir)
 
         if not steps:
-            raise ValueError("체크포인트가，생성되지 않음")
+            raise ValueError("체크포인트가 생성되지 않음")
 
         # 가장 최근 체크포인트 확인
         last_step = max(steps)
@@ -313,7 +313,7 @@ def test_flax_checkpoint(epochs, collector, logger, checkpoint_dir):
 
         # 학습 실행
         logger.info(f"FLAX 모델 학습 - {epochs} 에포크")
-        train_state = trainer.train(num_epochs=epochs, subdir=str(flax_checkpoint_dir))
+        trainer.train(num_epochs=epochs, subdir=str(flax_checkpoint_dir))
 
         # 체크포인트 디렉토리 확인
         if not flax_checkpoint_dir.exists():

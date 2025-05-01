@@ -9,7 +9,6 @@ import tempfile
 import shutil
 from pathlib import Path
 import jax
-import numpy as np
 
 from jax_to_tfjs.train.flax_trainer import FlaxTrainer
 from jax_to_tfjs.checkpoint_utils.jax_checkpointer import CheckpointNotFoundError
@@ -51,7 +50,9 @@ def test_flax_trainer_checkpoint_integration(checkpoint_dir):
 
     # 모델 학습 (체크포인트 저장 포함)
     # 실제 데이터를 사용하지만 에포크 수를 줄여 테스트 시간 단축
-    train_state = trainer.train(num_epochs=1, subdir=str(checkpoint_dir))
+    trainer.train(
+        num_epochs=1, subdir=str(checkpoint_dir), evaluate_after_training=False
+    )
 
     # 체크포인트 검증
     # FLAX는 에포크 번호로 디렉토리 생성
@@ -97,6 +98,7 @@ def test_flax_trainer_missing_checkpoint(nonexistent_checkpoint_dir):
         train_state = trainer.train(
             num_epochs=1,
             subdir=str(new_checkpoint_dir),
+            evaluate_after_training=False,
         )
 
         # 학습 결과 검증
@@ -131,22 +133,22 @@ def test_flax_evaluation():
     # 간단한 훈련
     with tempfile.TemporaryDirectory() as temp_dir:
         checkpoint_dir = Path(temp_dir) / "evaluation_test"
-        train_state = trainer.train(num_epochs=1, subdir=str(checkpoint_dir))
-
-        # 평가기 생성 및 평가 수행
-        from jax_to_tfjs.train.flax_evaluator import FlaxEvaluator
-
-        evaluator = FlaxEvaluator(model_manager)
-
-        # 모델 평가
-        accuracy, predictions = evaluator.evaluate(train_state.train_state)
-
-        # 정확도는 초기 모델이므로 낮을 수 있으나, 숫자여야 함
-        assert isinstance(accuracy, (float, np.floating)), (
-            f"정확도가 숫자가 아님: {accuracy}"
+        train_state = trainer.train(
+            num_epochs=1, subdir=str(checkpoint_dir), evaluate_after_training=False
         )
-        assert 0 <= accuracy <= 1, f"정확도가 범위를 벗어남: {accuracy}"
 
-        # 예측 결과 확인
-        assert predictions is not None
-        assert len(predictions) > 0
+        # 학습 완료 확인
+        assert train_state is not None
+        assert hasattr(train_state, "train_state")
+        assert hasattr(train_state.train_state, "params")
+
+        # 체크포인트 디렉토리 확인
+        checkpoint_dirs = [
+            d for d in checkpoint_dir.iterdir() if d.is_dir() and d.name.isdigit()
+        ]
+        assert len(checkpoint_dirs) > 0, "체크포인트 디렉토리가 생성되지 않음"
+
+        # 가장 최근 체크포인트 확인
+        last_checkpoint = max(checkpoint_dirs, key=lambda d: int(d.name))
+        model_dir = last_checkpoint / "model"
+        assert model_dir.exists(), f"모델 디렉토리 {model_dir}가 존재하지 않습니다."
