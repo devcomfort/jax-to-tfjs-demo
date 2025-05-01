@@ -278,7 +278,6 @@ def test_jax_checkpoint(epochs, collector, logger, checkpoint_dir):
             "last_step": last_step,
         }
         logger.info("JAX 체크포인트 테스트 성공")
-
     except Exception as e:
         logger.error(f"JAX 체크포인트 테스트 실패: {e}")
         logger.error(traceback.format_exc())
@@ -357,7 +356,6 @@ def test_flax_checkpoint(epochs, collector, logger, checkpoint_dir):
             "last_checkpoint": str(last_checkpoint),
         }
         logger.info("FLAX 체크포인트 테스트 성공")
-
     except Exception as e:
         logger.error(f"FLAX 체크포인트 테스트 실패: {e}")
         logger.error(traceback.format_exc())
