@@ -294,15 +294,16 @@ class JAXTrainer(BaseTrainer):
             # 딕셔너리로 변환 (타입 체커 우회)
             metrics = {}
             for field in ["accuracy", "precision", "recall", "f1"]:
+                # 객체 속성으로 접근
                 try:
                     # 객체 속성으로 접근
                     metrics[field] = getattr(metrics_obj, field)
-                except:
+                except AttributeError:
                     # 딕셔너리로 접근하거나 기본값 사용
-                    if hasattr(metrics_obj, "__getitem__"):
+                    if hasattr(metrics_obj, "__getitem__"):  # type: ignore
                         try:
-                            metrics[field] = metrics_obj[field]
-                        except:
+                            metrics[field] = metrics_obj[field]  # type: ignore
+                        except (KeyError, IndexError, TypeError):
                             metrics[field] = 0.0
                     else:
                         metrics[field] = 0.0

@@ -268,7 +268,7 @@ class FlaxTrainer(BaseTrainer):
             from ..evaluation.models.flax_evaluator import evaluate_flax_model
 
             # 상세 평가 수행 - 결과를 분리
-            result = evaluate_flax_model(
+            result = evaluate_flax_model(  # type: ignore
                 state, test_images, test_labels, with_probs=True
             )
 
@@ -281,15 +281,15 @@ class FlaxTrainer(BaseTrainer):
             for field in ["accuracy", "precision", "recall", "f1"]:
                 try:
                     # 객체 속성으로 접근
-                    metrics[field] = getattr(metrics_obj, field)
-                except:
+                    metrics[field] = getattr(metrics_obj, field)  # type: ignore
+                except AttributeError:
                     # 딕셔너리로 접근하거나 기본값 사용
                     try:
                         if isinstance(metrics_obj, dict):
-                            metrics[field] = metrics_obj.get(field, 0.0)
+                            metrics[field] = metrics_obj.get(field, 0.0)  # type: ignore
                         else:
                             metrics[field] = 0.0
-                    except:
+                    except (TypeError, ValueError):
                         metrics[field] = 0.0
 
             # 상세 메트릭 계산

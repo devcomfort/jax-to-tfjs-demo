@@ -5,8 +5,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Union, TypedDict, cast
-import numpy as np
+from typing import Dict, List, Any, Optional, TypedDict
 
 
 # 메트릭 결과를 위한 TypedDict 정의

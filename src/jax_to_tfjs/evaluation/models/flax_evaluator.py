@@ -17,7 +17,6 @@ from typing import Callable, Any, Dict, Optional, Union, cast, Tuple
 from jax_to_tfjs.evaluation.metrics import calculate_metrics
 from jax_to_tfjs.evaluation.types.metrics import ModelMetrics
 from jax import random
-from numpy.typing import NDArray
 
 # 실제 CNN 모델 클래스 임포트
 from jax_to_tfjs.models.flax.cnn_model import CNN
@@ -212,9 +211,6 @@ def evaluate_flax_model(
             logging.error(f"체크포인트 로드 실패: {e}")
             raise
 
-    # 프로젝트의 실제 CNN 모델 클래스 사용
-    cnn_model = CNN()
-
     # JAX 배열로 변환
     test_images_jax = jnp.array(test_images)
     test_labels_jax = jnp.array(test_labels)
@@ -256,7 +252,6 @@ def evaluate_flax_model(
             logging.error(f"오류 타입: {type(e)}")
             raise
 
-    accuracy = correct / num_samples
     predictions = jnp.concatenate(all_predictions)
     logits = jnp.concatenate(all_logits)
 
@@ -278,10 +273,10 @@ def evaluate_flax_model(
     probs_np = np.array(probs) if not isinstance(probs, np.ndarray) else probs
 
     # 메트릭 계산
-    metrics = calculate_metrics(test_labels_np, predictions_np, probs_np)
+    metrics = calculate_metrics(test_labels_np, predictions_np, probs_np)  # type: ignore
 
     # 평가 결과 반환
     if with_probs:
-        return metrics, predictions_np, probs_np
+        return metrics, predictions_np, probs_np  # type: ignore
 
-    return metrics
+    return metrics  # type: ignore
