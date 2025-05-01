@@ -18,9 +18,6 @@ from jax_to_tfjs.evaluation.metrics import calculate_metrics
 from jax_to_tfjs.evaluation.types.metrics import ModelMetrics
 from jax import random
 
-# 실제 CNN 모델 클래스 임포트
-from jax_to_tfjs.models.flax.cnn_model import CNN
-
 # 경고 비활성화
 logging.getLogger("jax").setLevel(logging.ERROR)
 
