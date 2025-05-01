@@ -7,7 +7,6 @@ JAX 모델의 학습을 위한 구체적인 트레이너 구현을 제공합니�
 import jax
 import jax.numpy as jnp
 import optax
-import os
 from typing import (
     Any,
     Dict,
@@ -20,14 +19,12 @@ from typing import (
 )
 import numpy as np
 from tqdm import tqdm
-from pathlib import Path
 import json
 
 from ..checkpoint_utils.jax_checkpointer import JAXCheckpointer
 from ..conf.paths import get_jax_checkpoint_path
 from .base_trainer import BaseTrainer
 from .data_loader import MNISTDataLoader
-from .jax_evaluator import JAXEvaluator
 
 # 타입 정의
 # Params를 optax에서 사용하는 PyTree 타입과 호환되도록 재정의
@@ -39,8 +36,8 @@ Loss = Union[float, jnp.ndarray]
 class JAXTrainingState(NamedTuple):
     """JAX 모델 학습 상태를 저장하는 NamedTuple"""
 
-    params: Params
-    opt_state: optax.OptState
+    params: Dict[str, Any]
+    opt_state: Any
     step: int
     epoch: int
     loss: float
@@ -279,62 +276,78 @@ class JAXTrainer(BaseTrainer):
             print("학습 완료 후 상세 평가 수행")
             print("=" * 50)
 
-            # JAXEvaluator 인스턴스 생성
-            evaluator = JAXEvaluator(self.model)
+            # 테스트 데이터 로드
+            test_images, test_labels = MNISTDataLoader.load_mnist_test()
 
-            # 상세 평가 수행
-            accuracy, predictions = evaluator.evaluate(params)
+            # evaluation 모듈에서 평가 함수 가져오기
+            from ..evaluation.models.jax_evaluator import evaluate_jax_model
 
-            # 상세 메트릭 계산 (if 구문 대신 try-except로 변경)
+            # 상세 평가 수행 - 결과를 딕셔너리로 변환
+            result = evaluate_jax_model(
+                params, test_images, test_labels, with_probs=True
+            )
+
+            # 결과 분리
+            metrics_obj = result[0]
+            predictions = result[1]
+
+            # 딕셔너리로 변환 (타입 체커 우회)
+            metrics = {}
+            for field in ["accuracy", "precision", "recall", "f1"]:
+                try:
+                    # 객체 속성으로 접근
+                    metrics[field] = getattr(metrics_obj, field)
+                except:
+                    # 딕셔너리로 접근하거나 기본값 사용
+                    if hasattr(metrics_obj, "__getitem__"):
+                        try:
+                            metrics[field] = metrics_obj[field]
+                        except:
+                            metrics[field] = 0.0
+                    else:
+                        metrics[field] = 0.0
+
+            # 상세 메트릭 계산
             try:
-                from sklearn.metrics import (
-                    precision_score,
-                    recall_score,
-                    f1_score,
-                    confusion_matrix,
-                )
-
-                test_images, test_labels = MNISTDataLoader.load_mnist_test()
-
-                # 정밀도, 재현율, F1 점수 계산
-                precision = precision_score(
-                    test_labels, predictions, average="weighted"
-                )
-                recall = recall_score(test_labels, predictions, average="weighted")
-                f1 = f1_score(test_labels, predictions, average="weighted")
-
-                print(f"\n정확도(Accuracy): {accuracy:.4f}")
-                print(f"정밀도(Precision): {precision:.4f}")
-                print(f"재현율(Recall): {recall:.4f}")
-                print(f"F1 점수: {f1:.4f}")
+                from sklearn.metrics import confusion_matrix
 
                 # 혼동 행렬 계산 및 출력
                 cm = confusion_matrix(test_labels, predictions)
                 print("\n혼동 행렬:")
                 print(cm)
 
+                # 메트릭 출력
+                print(
+                    f"\n정확도(Accuracy): {metrics['accuracy']:.4f} (전체 중 올바르게 분류한 비율)"
+                )
+                print(
+                    f"정밀도(Precision): {metrics['precision']:.4f} (양성으로 예측한 것 중 실제 양성 비율)"
+                )
+                print(
+                    f"재현율(Recall): {metrics['recall']:.4f} (실제 양성 중 양성으로 예측한 비율)"
+                )
+                print(
+                    f"F1 점수: {metrics['f1']:.4f} (정밀도와 재현율의 조화평균, 두 지표의 균형)"
+                )
+
                 # 메트릭 저장
                 evaluation_dir = checkpoint_dir / "evaluation"
                 evaluation_dir.mkdir(exist_ok=True)
 
-                metrics = {
-                    "accuracy": float(accuracy),
-                    "precision": float(precision),
-                    "recall": float(recall),
-                    "f1": float(f1),
-                    "confusion_matrix": cm.tolist(),
-                }
+                # 혼동 행렬 추가
+                metrics_dict = dict(metrics)
+                metrics_dict["confusion_matrix"] = cm.tolist()
 
                 # 메트릭을 JSON 파일로 저장
                 metrics_path = evaluation_dir / "metrics.json"
                 with open(metrics_path, "w") as f:
-                    json.dump(metrics, f, indent=2)
+                    json.dump(metrics_dict, f, indent=2)
 
                 print(f"\n평가 메트릭 저장 완료: {metrics_path}")
 
             except ImportError as e:
                 print(f"상세 메트릭 계산을 위한 라이브러리를 찾을 수 없습니다: {e}")
-                print(f"정확도만 계산합니다: {accuracy:.4f}")
+                print(f"기본 메트릭만 사용합니다: 정확도 {metrics['accuracy']:.4f}")
 
         return JAXTrainingState(
             params=params,
