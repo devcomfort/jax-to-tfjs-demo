@@ -2,10 +2,12 @@ import typer
 from .data_loader import MNISTDataLoader
 from .flax_trainer import FlaxTrainer
 from .jax_trainer import JAXTrainer
-from .flax_evaluator import FlaxEvaluator
-from .jax_evaluator import JAXEvaluator
 from ..models.flax_mnist_cnn import FlaxModelManager
 from ..models.jax_mnist_cnn import CNNModel
+
+# evaluate 함수들을 import
+from ..evaluation.models.flax_evaluator import evaluate_flax_model
+from ..evaluation.models.jax_evaluator import evaluate_jax_model
 
 app = typer.Typer()
 
@@ -56,20 +58,31 @@ def evaluate(
     """
     모델 평가 명령어
     """
+    # 테스트 데이터 로드
+    test_images, test_labels = MNISTDataLoader.load_mnist_test()
+
     if framework == "flax":
         model_manager = FlaxModelManager()
         model_manager.init_model()
-        evaluator = FlaxEvaluator(model_manager)
         state = model_manager.create_train_state(0.001)
-        accuracy, _ = evaluator.evaluate(state)
+
+        # 평가 수행
+        metrics, _, _ = evaluate_flax_model(
+            state, test_images, test_labels, with_probs=True
+        )
+        accuracy = metrics["accuracy"]
     elif framework == "jax":
         model = CNNModel()
         if model.params is None:
             model.init_params()  # 모델 파라미터 초기화
-        evaluator = JAXEvaluator(model)
+
         params = model.params
         if params is not None:
-            accuracy, _ = evaluator.evaluate(params)
+            # 평가 수행
+            metrics, _, _ = evaluate_jax_model(
+                params, test_images, test_labels, with_probs=True
+            )
+            accuracy = metrics["accuracy"]
         else:
             typer.echo("모델 파라미터가 초기화되지 않았습니다.")
             raise typer.Exit(code=1)

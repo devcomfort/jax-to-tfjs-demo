@@ -118,7 +118,7 @@ class MNISTDataLoader(BaseDataLoader):
         # 타입 안전을 위해 명시적 변수 할당
         # ObjectProxy 객체에 대한 인덱스 접근에 타입 무시 주석 추가
         mnist_dataset = datasets[0]  # type: ignore  # datasets는 런타임에는 튜플처럼 작동하지만 TensorFlow의 동적 타입 시스템으로 인해 정적 타입 체커가 이를 인식할 수 없음
-        mnist_info = datasets[1]  # type: ignore  # datasets는 런타임에는 튜플처럼 작동하지만 TensorFlow의 동적 타입 시스템으로 인해 정적 타입 체커가 이를 인식할 수 없음
+        # mnist_info = datasets[1]  # type: ignore  # 사용하지 않는 변수 제거
 
         # 학습 및 테스트 데이터셋 분리
         # 타입 주석: ObjectProxy 타입 무시
