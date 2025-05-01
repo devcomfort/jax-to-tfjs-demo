@@ -5,12 +5,12 @@ JAX 및 FLAX 모델에서 공통으로 사용하는 학습 및 평가 유틸리�
 """
 
 from typing import Any, Optional, Dict, Union
-import os
 
 from ...train.jax_trainer import JAXTrainer
-from ...train.jax_evaluator import JAXEvaluator
 from ...train.flax_trainer import FlaxTrainer
-from ...train.flax_evaluator import FlaxEvaluator
+# 순환 임포트 문제 해결을 위해 제거
+# from ...evaluation.models.jax_evaluator import evaluate_jax_model
+# from ...evaluation.models.flax_evaluator import evaluate_flax_model
 
 
 def train_and_evaluate(
@@ -49,8 +49,18 @@ def train_and_evaluate(
 
         # 평가 수행 (선택적)
         if evaluate_model:
-            evaluator = JAXEvaluator(model_or_manager)
-            metrics = evaluator.evaluate(params=training_state.params)
+            # 테스트 데이터 로드
+            from ...train.data_loader import MNISTDataLoader
+
+            test_images, test_labels = MNISTDataLoader.load_mnist_test()
+
+            # 동적으로 평가 함수 임포트
+            from ...evaluation.models.jax_evaluator import evaluate_jax_model
+
+            # 상세 평가 수행
+            metrics, _, _ = evaluate_jax_model(
+                training_state.params, test_images, test_labels, with_probs=True
+            )
             print(f"평가 결과: {metrics}")
 
         # 학습된 파라미터 반환
@@ -64,8 +74,18 @@ def train_and_evaluate(
 
         # 평가 수행 (선택적)
         if evaluate_model:
-            evaluator = FlaxEvaluator(model_or_manager)
-            metrics = evaluator.evaluate(training_state.train_state)
+            # 테스트 데이터 로드
+            from ...train.data_loader import MNISTDataLoader
+
+            test_images, test_labels = MNISTDataLoader.load_mnist_test()
+
+            # 동적으로 평가 함수 임포트
+            from ...evaluation.models.flax_evaluator import evaluate_flax_model
+
+            # 상세 평가 수행
+            metrics, _, _ = evaluate_flax_model(
+                training_state.train_state, test_images, test_labels, with_probs=True
+            )
             print(f"평가 결과: {metrics}")
 
         # 학습 상태 반환
